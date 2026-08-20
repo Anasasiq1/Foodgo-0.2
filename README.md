@@ -1,76 +1,77 @@
-# FOODGO — Headless WordPress + WooCommerce Frontend
+# Foodgo — Decoupled Headless WooCommerce Frontend
 
-**Modern Decoupled React Frontend for WooCommerce & WordPress**  
-*React 19 • TypeScript • Vite • Tailwind CSS • WooCommerce Store API • Foodgo Headless Core Plugin*
-
----
-
-## 🌟 Architecture Overview
-
-Foodgo operates as a fully decoupled **Headless WooCommerce Frontend**.
-
-```
-                ┌──────────────────────────┐
-                │       FOODGO FRONTEND    │
-                │                          │
-                │ React + TypeScript       │
-                │ Vite                     │
-                │ Tailwind CSS             │
-                │ Existing Foodgo UI       │
-                └────────────┬─────────────┘
-                             │
-                             │ HTTPS API
-                             ▼
-                ┌──────────────────────────┐
-                │       WORDPRESS          │
-                │                          │
-                │ WooCommerce              │
-                │ Foodgo Headless Plugin   │
-                │ Authentication           │
-                │ REST API                 │
-                │ Store API                │
-                └────────────┬─────────────┘
-                             │
-                             ▼
-                ┌──────────────────────────┐
-                │ WordPress Database       │
-                │ MySQL / MariaDB          │
-                └──────────────────────────┘
-```
-
-- **Frontend**: Database-less React SPA with interactive product customizer (portion, spicy level, curry selection, toppings).
-- **Backend**: Standard WordPress + WooCommerce managing all products, categories, stock, orders, coupons, taxes, and payments.
-- **Plugin (`foodgo-headless-core`)**: Provides `/wp-json/foodgo/v1/config` automatic runtime configuration, Store API customization extensions, kitchen merchant tickets, and delivery logistics.
+Foodgo is a high-performance, mobile-first food ordering web application built with React 19, TypeScript, and Tailwind CSS, powered by a standard headless WordPress + WooCommerce backend through the **Foodgo Headless Connector** plugin.
 
 ---
 
-## 🚀 Quick Setup
+## 🚀 Architecture Highlights
+
+- **Single Source of Truth**: Products, pricing, tax, stock, variations, coupons, payment gateways, and orders live exclusively in WordPress & WooCommerce.
+- **Zero Custom Database**: No separate backend database (no MongoDB, SQLite, Supabase, or Firebase) — everything is stored directly in WordPress MySQL/MariaDB.
+- **Native WooCommerce Administration**: Manage your entire kitchen catalog, orders, and payment methods from standard WordPress & WooCommerce Admin (`/wp-admin`).
+- **Dynamic Feature Auto-Discovery**: Frontend auto-discovers currency, payment gateways, coupons, and delivery configurations at runtime.
+- **Food Customization Engine**: Spiciness sliders, portions, salna/curry addons, and kitchen instructions survive all the way to WooCommerce order items.
+
+---
+
+## 📁 Repository Structure
+
+```
+Foodgo/
+│
+├── src/
+│   ├── components/         # Mobile-first storefront screens
+│   ├── context/            # React state & WooCommerce synchronization
+│   ├── config/             # Runtime dynamic backend configuration
+│   ├── services/           # Decoupled API service layer
+│   │   ├── auth/           # WordPress customer authentication
+│   │   ├── woocommerce/    # Store API (products, cart, checkout, orders)
+│   │   ├── foodgo/         # Kitchen & delivery logistics
+│   │   ├── payments/       # Dynamic payment adapters
+│   │   └── apiClient.ts    # Unified fetch client with Store API nonce support
+│   └── types/              # TypeScript schema & WooCommerce interfaces
+│
+├── wordpress-plugin/
+│   └── foodgo-headless-connector/   # Production-ready WordPress bridge plugin
+│       ├── foodgo-headless-connector.php
+│       ├── includes/       # Dynamic config, CORS, auth, products, orders
+│       ├── admin/          # Minimal connection settings page
+│       └── readme.txt
+│
+└── docs/                   # Complete architecture & deployment manuals
+    ├── ARCHITECTURE.md
+    ├── WORDPRESS-SETUP.md
+    ├── WOOCOMMERCE-SETUP.md
+    ├── PLUGIN-INSTALLATION.md
+    ├── WOOCOMMERCE-PLUGIN-COMPATIBILITY.md
+    ├── FRONTEND-CONNECTION.md
+    ├── API.md
+    ├── SECURITY.md
+    ├── AAPANEL.md
+    └── DEPLOYMENT.md
+```
+
+---
+
+## ⚡ Quick Start
 
 ### 1. WordPress & WooCommerce Setup
-1. Install WordPress 6.0+ on your server or aaPanel.
-2. Install & activate **WooCommerce**.
-3. Upload and activate the `foodgo-headless-core` plugin from this repository.
-4. In **WordPress Admin → Foodgo**, enter your frontend website URL.
+1. Install WordPress 6.0+ and WooCommerce 8.0+.
+2. Upload `wordpress-plugin/foodgo-headless-connector` into `wp-content/plugins/`.
+3. Activate the plugin in **WordPress Admin → Plugins**.
+4. Set your frontend URL in **Settings → Foodgo Connector**.
 
-### 2. Frontend Configuration
-Set your WordPress URL in `.env`:
-```bash
-VITE_WP_URL="https://api.yourdomain.com"
-```
-
-### 3. Run or Build Frontend
-```bash
-# Development
-npm run dev
-
-# Production Build
-npm run build
-```
-
----
-
-## 📖 Comprehensive Documentation
-
-- [System Architecture](docs/ARCHITECTURE.md)
-- [WordPress Setup Guide](docs/WORDPRESS-SETUP.md)
-- [aaPanel Deployment Guide](docs/AAPANEL.md)
+### 2. Frontend Launch
+1. Clone the repository and install dependencies:
+   ```bash
+   npm install
+   ```
+2. Set your WordPress API URL in `.env`:
+   ```env
+   VITE_WP_URL=https://your-wp-domain.com
+   ```
+3. Run dev server or build for production:
+   ```bash
+   npm run dev
+   npm run build
+   ```

@@ -374,6 +374,23 @@ export interface WcOrder {
   foodgo_kitchen_status?: 'Received' | 'Preparing' | 'Ready for Pickup';
 }
 
+export interface CustomerProfile {
+  id: number;
+  username: string;
+  email: string;
+  displayName: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+  avatar?: string;
+  role?: string;
+}
+
 export interface FoodgoPublicConfig {
   siteName: string;
   siteUrl: string;

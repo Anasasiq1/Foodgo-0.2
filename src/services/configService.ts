@@ -14,11 +14,27 @@ export interface HealthCheckResult {
 
 export async function fetchFoodgoConfig(): Promise<FoodgoPublicConfig | null> {
   const config = getRuntimeConfig();
+
+  // If no WP URL configured yet, try checking /api/connection/public from admin.php setup
+  if (!config.wpUrl) {
+    try {
+      const pubRes = await fetch('/api/connection/public');
+      if (pubRes.ok) {
+        const pubData = await pubRes.json();
+        if (pubData.wpUrl) {
+          updateRuntimeConfig({ wpUrl: pubData.wpUrl });
+        }
+      }
+    } catch {
+      // offline or standalone
+    }
+  }
+
   try {
     const data = await apiClient<FoodgoPublicConfig>('/wp-json/foodgo/v1/config', {
       isStoreApi: false,
     });
-    if (data && data.siteName) {
+    if (data && (data.siteName || data.currency)) {
       updateRuntimeConfig({
         siteUrl: data.siteUrl,
         currency: data.currency || 'INR',
@@ -36,7 +52,7 @@ export async function fetchFoodgoConfig(): Promise<FoodgoPublicConfig | null> {
         updateRuntimeConfig({ isWooCommerceConnected: true });
       }
     } catch {
-      // Offline fallback
+      // Standalone mode
     }
   }
   return null;
@@ -78,23 +94,23 @@ export async function runConnectionDiagnostics(): Promise<HealthCheckResult> {
   }
 
   try {
-    // 3. Test Foodgo Headless Core plugin
+    // 3. Test Foodgo Headless Connector plugin
     const foodgoRes = await apiClient<FoodgoPublicConfig>('/wp-json/foodgo/v1/config');
-    if (foodgoRes && foodgoRes.siteName) {
+    if (foodgoRes && (foodgoRes.siteName || foodgoRes.currency)) {
       result.foodgoPluginConnected = true;
-      result.siteName = foodgoRes.siteName;
-      result.currency = `${foodgoRes.currencySymbol} (${foodgoRes.currency})`;
+      result.siteName = foodgoRes.siteName || 'Foodgo Store';
+      result.currency = `${foodgoRes.currencySymbol || '₹'} (${foodgoRes.currency || 'INR'})`;
     }
   } catch {
     // Foodgo plugin not active
   }
 
   if (result.wordpressConnected && result.woocommerceConnected && result.foodgoPluginConnected) {
-    result.details = 'Full Headless WordPress + WooCommerce + Foodgo Core connection established.';
+    result.details = 'Full Headless WordPress + WooCommerce + Foodgo Connector connection established.';
   } else if (result.wordpressConnected && result.woocommerceConnected) {
-    result.details = 'Connected to WooCommerce Store API. Foodgo Core plugin can be installed for advanced food customization.';
+    result.details = 'Connected to WooCommerce Store API. Install Foodgo Connector plugin for food customization.';
   } else {
-    result.details = 'Running in resilient standalone mode. Configure VITE_WP_URL in .env to connect your WordPress site.';
+    result.details = 'Configure WordPress URL in domain.com/admin.php or set VITE_WP_URL in .env.';
   }
 
   return result;
