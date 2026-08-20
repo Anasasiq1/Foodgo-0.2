@@ -54,9 +54,10 @@ export const AdminCurriesTab: React.FC<AdminCurriesTabProps> = ({
 
   // Filtered curries
   const filteredCurries = curries.filter((c) => {
+    const q = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.description && c.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.description ? c.description.toLowerCase().includes(q) : false);
     const matchesStock =
       filterStock === 'all'
         ? true

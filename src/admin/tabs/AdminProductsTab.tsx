@@ -342,14 +342,15 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({
 
   // Filtered products list
   const filteredProducts = products.filter((p) => {
+    const q = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.subtitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.subtitle || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q);
 
     const matchesCat =
       selectedCategory === 'All' ||
-      p.category.toLowerCase() === selectedCategory.toLowerCase();
+      (p.category || '').toLowerCase() === (selectedCategory || '').toLowerCase();
 
     const matchesAvail =
       selectedAvailability === 'all' ||

@@ -92,14 +92,14 @@ export const HomeScreen: React.FC = () => {
     return moduleProducts.filter((p) => {
       const matchesCategory =
         activeCategory === 'All' ||
-        p.category.toLowerCase() === activeCategory.toLowerCase() ||
-        (activeCategory === 'Combos' && p.id.includes('chicken'));
+        (p.category || '').toLowerCase() === (activeCategory || '').toLowerCase() ||
+        (activeCategory === 'Combos' && (p.id || '').includes('chicken'));
 
       const matchesSearch =
         searchQuery.trim() === '' ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.subtitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+        (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.subtitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.description ? p.description.toLowerCase().includes(searchQuery.toLowerCase()) : false);
 
       return matchesCategory && matchesSearch;
     });

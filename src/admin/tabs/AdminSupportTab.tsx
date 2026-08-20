@@ -132,11 +132,12 @@ export const AdminSupportTab: React.FC<AdminSupportTabProps> = ({
   };
 
   const filteredConversations = conversations.filter((c) => {
+    const q = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.orderNumber && c.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+      (c.customerName || '').toLowerCase().includes(q) ||
+      (c.customerEmail || '').toLowerCase().includes(q) ||
+      (c.lastMessage || '').toLowerCase().includes(q) ||
+      (c.orderNumber ? c.orderNumber.toLowerCase().includes(q) : false);
 
     if (!matchesSearch) return false;
 

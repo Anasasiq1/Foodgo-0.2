@@ -77,13 +77,14 @@ export const AdminPaymentsTab: React.FC<AdminPaymentsTabProps> = ({ payments }) 
   };
 
   const filteredPayments = payments.filter((p) => {
+    const q = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.id || '').toLowerCase().includes(q) ||
+      (p.orderNumber || '').toLowerCase().includes(q) ||
+      (p.customerName || '').toLowerCase().includes(q);
 
     const matchesStatus =
-      statusFilter === 'All' || p.status.toLowerCase() === statusFilter.toLowerCase();
+      statusFilter === 'All' || (p.status || '').toLowerCase() === (statusFilter || '').toLowerCase();
 
     return matchesSearch && matchesStatus;
   });

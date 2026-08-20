@@ -17,6 +17,13 @@ import {
   INITIAL_SUPPORT_MESSAGES,
   INITIAL_ORDERS,
 } from '../data/products';
+import { fetchFoodgoConfig } from '../services/configService';
+import { fetchProductsFromWc, fetchCategoriesFromWc } from '../services/woocommerce/productsApi';
+import { addToWcCart, clearWcCart as clearWcCartService } from '../services/woocommerce/cartApi';
+import { processWcCheckout } from '../services/woocommerce/checkoutApi';
+import { fetchCustomerOrders } from '../services/woocommerce/ordersApi';
+import { getCurrentUserFromWordPress } from '../services/auth/authService';
+import { getRuntimeConfig } from '../config/runtimeConfig';
 
 export interface CategoryItem {
   id: string;
@@ -30,9 +37,9 @@ const DEFAULT_MODULES: AppModule[] = [
   {
     id: 'food',
     name: 'Food',
-    title: 'HM-Q Foodgo',
-    subtitle: 'Powered by HM-Q',
-    tagline: 'Order your favourite food!',
+    title: 'Foodgo Gourmet Kitchen',
+    subtitle: 'Powered by WooCommerce',
+    tagline: 'Order handcrafted gourmet burgers & meals!',
     icon: '🍔',
     order: 1,
     active: true,
@@ -44,8 +51,8 @@ const DEFAULT_MODULES: AppModule[] = [
   {
     id: 'grocery',
     name: 'Grocery',
-    title: 'HM-Q Grocery',
-    subtitle: 'Powered by HM-Q',
+    title: 'Foodgo Fresh Grocery',
+    subtitle: 'Daily Farm Essentials',
     tagline: 'Shop groceries near you',
     icon: '🛒',
     order: 2,
@@ -58,8 +65,8 @@ const DEFAULT_MODULES: AppModule[] = [
   {
     id: 'pharmacy',
     name: 'Pharmacy',
-    title: 'HM-Q Pharmacy',
-    subtitle: 'Powered by HM-Q',
+    title: 'Foodgo Pharmacy',
+    subtitle: 'Essential Care',
     tagline: 'Medicines & healthcare delivered',
     icon: '💊',
     order: 3,
@@ -69,71 +76,51 @@ const DEFAULT_MODULES: AppModule[] = [
     bannerAction: 'Explore →',
     bannerBadge: 'Certified Meds',
   },
-  {
-    id: 'cosmetics',
-    name: 'Cosmetics',
-    title: 'HM-Q Cosmetics',
-    subtitle: 'Powered by HM-Q',
-    tagline: 'Beauty, skincare & perfumes',
-    icon: '💄',
-    order: 4,
-    active: true,
-    bannerTitle: 'Luxury Glow Boutique',
-    bannerSubtitle: 'Premium organic beauty & skincare',
-    bannerAction: 'Discover →',
-    bannerBadge: 'Top Brands',
-  },
-  {
-    id: 'stationery',
-    name: 'Stationery',
-    title: 'HM-Q Stationery',
-    subtitle: 'Powered by HM-Q',
-    tagline: 'Office supplies & books',
-    icon: '📦',
-    order: 5,
-    active: true,
-    bannerTitle: 'Office & Study Supplies',
-    bannerSubtitle: 'Notebooks, pens & craft supplies',
-    bannerAction: 'Browse →',
-    bannerBadge: 'Back to School',
-  },
 ];
 
-interface AppContextType {
-  screen: AppScreen;
-  screenHistory: AppScreen[];
-  navigateTo: (screen: AppScreen, clearHistory?: boolean) => void;
+const INITIAL_CATEGORIES: CategoryItem[] = [
+  { id: 'all', name: 'All', order: 0, active: true },
+  { id: 'burgers', name: 'Burgers', order: 1, active: true },
+  { id: 'beverages', name: 'Drinks', order: 2, active: true },
+  { id: 'sides', name: 'Sides', order: 3, active: true },
+  { id: 'desserts', name: 'Desserts', order: 4, active: true },
+];
+
+export interface AppContextType {
+  currentScreen: AppScreen;
+  navigateTo: (screen: AppScreen, resetHistory?: boolean) => void;
   goBack: () => void;
-  selectedProductId: string;
-  setSelectedProductId: (id: string) => void;
-  openProductDetail: (id: string) => void;
-
-  // Modules & Multi-Service Switching
-  modules: AppModule[];
+  screenHistory: AppScreen[];
   activeModuleId: string;
-  activeModule: AppModule | null;
   setActiveModuleId: (id: string) => void;
-  refreshModules: () => Promise<void>;
-  
-  // Curries & Salna Level
-  curries: CurryOption[];
-  refreshCurries: () => Promise<void>;
-
-  // Products & Filter
-  products: Product[];
+  modules: AppModule[];
+  activeModule: AppModule;
+  selectedCategory: string;
+  setSelectedCategory: (category: string) => void;
   categories: CategoryItem[];
-  activeCategory: string;
-  setActiveCategory: (cat: string) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  refreshProducts: () => void;
-  
-  // Favorites
+  filterSpiceLevel: number | null;
+  setFilterSpiceLevel: (level: number | null) => void;
+  filterPriceRange: [number, number];
+  setFilterPriceRange: (range: [number, number]) => void;
+  filterSortBy: 'popular' | 'rating' | 'price-asc' | 'price-desc';
+  setFilterSortBy: (sort: 'popular' | 'rating' | 'price-asc' | 'price-desc') => void;
+  filterOpenNow: boolean;
+  setFilterOpenNow: (val: boolean) => void;
+  filterFeaturedOnly: boolean;
+  setFilterFeaturedOnly: (val: boolean) => void;
+  resetFilters: () => void;
+  activeFilterCount: number;
+  products: Product[];
+  filteredProducts: Product[];
+  selectedProduct: Product | null;
+  setSelectedProduct: (product: Product | null) => void;
+  viewProductDetails: (product: Product) => void;
+  customizeProduct: (product: Product) => void;
   favorites: string[];
   toggleFavorite: (productId: string) => void;
   isFavorite: (productId: string) => boolean;
-  
-  // Cart
   cart: CartItem[];
   addToCart: (item: Omit<CartItem, 'id'>) => void;
   removeFromCart: (itemId: string) => void;
@@ -141,8 +128,9 @@ interface AppContextType {
   clearCart: () => void;
   cartTotal: number;
   cartCount: number;
-
-  // Active Pending Item for Checkout/Direct Order
+  directCheckoutItem: CartItem | null;
+  setDirectCheckoutItem: (item: CartItem) => void;
+  clearDirectCheckout: () => void;
   pendingOrder: {
     items: CartItem[];
     subtotal: number;
@@ -150,348 +138,262 @@ interface AppContextType {
     deliveryFees: number;
     total: number;
     estimatedDelivery: string;
-  } | null;
-  setDirectCheckoutItem: (item: CartItem) => void;
-  
-  // User & Cards
+  };
   user: UserProfile;
   updateUser: (updated: Partial<UserProfile>) => void;
   paymentCards: PaymentCard[];
-  selectedCardType: 'mastercard' | 'visa' | 'upi';
-  setSelectedCardType: (type: 'mastercard' | 'visa' | 'upi') => void;
+  selectedCardType: string;
+  setSelectedCardType: (type: string) => void;
   addPaymentCard: (card: Omit<PaymentCard, 'id'>) => void;
   deletePaymentCard: (id: string) => void;
-  saveCardForFuture: boolean;
-  setSaveCardForFuture: (save: boolean) => void;
-  
-  // Orders
   orders: Order[];
   createOrder: () => Promise<Order>;
   lastPlacedOrder: Order | null;
-  
-  // Success Modal
   isSuccessModalOpen: boolean;
-  setIsSuccessModalOpen: (open: boolean) => void;
   closeSuccessModal: () => void;
-  
-  // Chat Support
   messages: ChatMessage[];
-  sendMessage: (text: string) => void;
-  sendTextMessage: (text: string, orderId?: string, orderNumber?: string) => Promise<void>;
-  sendVoiceMessage: (audioUrl: string, duration: number, orderId?: string, orderNumber?: string) => Promise<void>;
-  markSupportAsRead: () => Promise<void>;
-  fetchSupportMessages: () => Promise<void>;
   unreadSupportCount: number;
-  
-  // Reset demo
-  resetToDefaults: () => void;
+  markSupportAsRead: () => void;
+  sendTextMessage: (text: string, orderId?: string, orderNumber?: string) => Promise<void>;
+  sendVoiceMessage: (
+    audioUrl: string,
+    duration: number,
+    orderId?: string,
+    orderNumber?: string
+  ) => Promise<void>;
+  curries: CurryOption[];
+  isWooCommerceConnected: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Splash starts first, then auto-transitions to home
-  const [screen, setScreen] = useState<AppScreen>('splash');
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>('home');
   const [screenHistory, setScreenHistory] = useState<AppScreen[]>(['home']);
-  const [selectedProductId, setSelectedProductId] = useState<string>('cheeseburger-wendy');
-  
-  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
-  const [curries, setCurries] = useState<CurryOption[]>([]);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Modules & Multi-Service State
+  const [activeModuleId, setActiveModuleId] = useState<string>('food');
   const [modules, setModules] = useState<AppModule[]>(DEFAULT_MODULES);
-  const [activeModuleId, setActiveModuleIdState] = useState<string>(() => {
-    try {
-      return localStorage.getItem('foodgo_active_module') || 'food';
-    } catch {
-      return 'food';
-    }
-  });
-
-  const setActiveModuleId = useCallback((id: string) => {
-    setActiveModuleIdState(id);
-    setActiveCategory('All');
-    try {
-      localStorage.setItem('foodgo_active_module', id);
-    } catch {
-      // Ignore
-    }
-  }, []);
-
-  const activeModule = modules.find((m) => m.id === activeModuleId && m.active !== false) ||
-    modules.find((m) => m.active !== false) ||
-    modules[0] ||
-    null;
-  
-  // Favorites
+  const [categories, setCategories] = useState<CategoryItem[]>(INITIAL_CATEGORIES);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterSpiceLevel, setFilterSpiceLevel] = useState<number | null>(null);
+  const [filterPriceRange, setFilterPriceRange] = useState<[number, number]>([0, 500]);
+  const [filterSortBy, setFilterSortBy] = useState<'popular' | 'rating' | 'price-asc' | 'price-desc'>('popular');
+  const [filterOpenNow, setFilterOpenNow] = useState<boolean>(false);
+  const [filterFeaturedOnly, setFilterFeaturedOnly] = useState<boolean>(false);
+  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('foodgo_favs');
-      return saved ? JSON.parse(saved) : ['cheeseburger-wendy'];
-    } catch {
-      return ['cheeseburger-wendy'];
-    }
-  });
-
-  // Cart
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('foodgo_cart');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
-
-  // User
-  const [user, setUser] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem('foodgo_user');
-      return saved ? JSON.parse(saved) : INITIAL_USER;
-    } catch {
-      return INITIAL_USER;
-    }
-  });
-
-  // Orders
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem('foodgo_orders');
-      return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-    } catch {
-      return INITIAL_ORDERS;
-    }
-  });
-
-  // Cards
-  const [paymentCards, setPaymentCards] = useState<PaymentCard[]>(() => {
-    try {
-      const saved = localStorage.getItem('foodgo_cards');
-      return saved ? JSON.parse(saved) : INITIAL_PAYMENT_CARDS;
-    } catch {
-      return INITIAL_PAYMENT_CARDS;
-    }
-  });
-  const [selectedCardType, setSelectedCardType] = useState<'mastercard' | 'visa' | 'upi'>('mastercard');
-  const [saveCardForFuture, setSaveCardForFuture] = useState<boolean>(true);
-
-  // Success Modal
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
-  const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
-
-  // Direct checkout item
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [directCheckoutItem, setDirectCheckoutItemState] = useState<CartItem | null>(null);
-
-  // Chat & Support
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const saved = localStorage.getItem('foodgo_chat');
-      return saved ? JSON.parse(saved) : INITIAL_SUPPORT_MESSAGES;
-    } catch {
-      return INITIAL_SUPPORT_MESSAGES;
-    }
-  });
+  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
+  const [paymentCards, setPaymentCards] = useState<PaymentCard[]>(INITIAL_PAYMENT_CARDS);
+  const [selectedCardType, setSelectedCardType] = useState<string>('Cash on Delivery');
+  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_SUPPORT_MESSAGES);
   const [unreadSupportCount, setUnreadSupportCount] = useState<number>(0);
+  const [curries, setCurries] = useState<CurryOption[]>([]);
+  const [isWooCommerceConnected, setIsWooCommerceConnected] = useState<boolean>(false);
 
-  // Fetch live support messages from backend
-  const fetchSupportMessages = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/support?email=${encodeURIComponent(user.email)}&name=${encodeURIComponent(user.name)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.messages)) {
-          setMessages(data.messages);
-          if (typeof data.unreadCountCustomer === 'number') {
-            setUnreadSupportCount(data.unreadCountCustomer);
+  // Initialize runtime config and discover WordPress backend
+  useEffect(() => {
+    async function initBackend() {
+      try {
+        const config = await fetchFoodgoConfig();
+        if (config) {
+          setIsWooCommerceConnected(true);
+          if (config.modules && config.modules.length > 0) {
+            setModules(config.modules);
           }
         }
+      } catch {
+        // Standalone fallback
       }
-    } catch {
-      // Offline fallback
     }
-  }, [user.email, user.name]);
+    initBackend();
+  }, []);
 
-  // Mark support messages as read
-  const markSupportAsRead = useCallback(async () => {
-    setUnreadSupportCount(0);
+  // Fetch live products from WooCommerce
+  const syncProducts = useCallback(async () => {
     try {
-      await fetch('/api/support/read', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'customer' }),
-      });
+      const wcProducts = await fetchProductsFromWc();
+      if (wcProducts && wcProducts.length > 0) {
+        setProducts(wcProducts);
+        setIsWooCommerceConnected(true);
+      }
+    } catch (err) {
+      console.warn('Could not sync WooCommerce products:', err);
+    }
+  }, []);
+
+  // Fetch live categories from WooCommerce
+  const syncCategories = useCallback(async () => {
+    try {
+      const wcCategories = await fetchCategoriesFromWc();
+      if (wcCategories && wcCategories.length > 0) {
+        setCategories([{ id: 'all', name: 'All', order: 0, active: true }, ...wcCategories]);
+      }
+    } catch (err) {
+      console.warn('Could not sync WooCommerce categories:', err);
+    }
+  }, []);
+
+  // Fetch customer orders from WordPress / WooCommerce
+  const syncOrders = useCallback(async () => {
+    try {
+      const wcOrders = await fetchCustomerOrders();
+      if (wcOrders && wcOrders.length > 0) {
+        setOrders(wcOrders);
+      }
     } catch {
       // Ignore
     }
   }, []);
 
-  // Fetch live products from backend
-  const fetchProducts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/products');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.products) && data.products.length > 0) {
-          setProducts(data.products);
+  // Fetch authenticated customer profile
+  useEffect(() => {
+    async function syncUserProfile() {
+      try {
+        const wpUser = await getCurrentUserFromWordPress();
+        if (wpUser) {
+          setUser(wpUser);
         }
+      } catch {
+        // Ignore
       }
-    } catch {
-      // Fallback already in state
     }
+    syncUserProfile();
   }, []);
 
-  // Fetch live modules from backend
-  const fetchModules = useCallback(async () => {
-    try {
-      const res = await fetch('/api/modules');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.modules) && data.modules.length > 0) {
-          setModules(data.modules);
-        }
-      }
-    } catch {
-      // Fallback in state
-    }
-  }, []);
-
-  // Fetch live categories from backend
-  const fetchCategories = useCallback(async () => {
-    try {
-      const res = await fetch('/api/categories');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.categories)) {
-          setCategories(data.categories);
-        }
-      }
-    } catch {
-      // Fallback
-    }
-  }, []);
-
-  // Fetch live active curries from backend (Salna level system)
-  const fetchCurries = useCallback(async () => {
-    try {
-      const res = await fetch('/api/curries');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.curries)) {
-          setCurries(data.curries);
-        }
-      }
-    } catch {
-      // Fallback
-    }
-  }, []);
-
-  // Fetch live orders
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.orders)) {
-          setOrders(data.orders);
-        }
-      }
-    } catch {
-      // Fallback
-    }
-  }, []);
-
-  // Periodic load & polling for live updates
+  // Initial load
   useEffect(() => {
-    fetchModules();
-    fetchProducts();
-    fetchCategories();
-    fetchCurries();
-    fetchOrders();
-    fetchSupportMessages();
+    syncProducts();
+    syncCategories();
+    syncOrders();
+  }, [syncProducts, syncCategories, syncOrders]);
 
-    const interval = setInterval(() => {
-      fetchModules();
-      fetchProducts();
-      fetchCurries();
-      fetchOrders();
-      fetchSupportMessages();
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [fetchModules, fetchProducts, fetchCategories, fetchCurries, fetchOrders, fetchSupportMessages]);
-
-  // Persist storage
-  useEffect(() => {
-    localStorage.setItem('foodgo_favs', JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    localStorage.setItem('foodgo_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  useEffect(() => {
-    localStorage.setItem('foodgo_user', JSON.stringify(user));
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem('foodgo_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('foodgo_chat', JSON.stringify(messages));
-  }, [messages]);
-
-  useEffect(() => {
-    localStorage.setItem('foodgo_cards', JSON.stringify(paymentCards));
-  }, [paymentCards]);
-
-  // Navigation handlers
-  const navigateTo = (newScreen: AppScreen, clearHistory = false) => {
-    if (newScreen === screen) return;
-    if (clearHistory) {
-      setScreenHistory([newScreen]);
+  // Screen Navigation
+  const navigateTo = (screen: AppScreen, resetHistory = false) => {
+    if (resetHistory) {
+      setScreenHistory([screen]);
     } else {
-      setScreenHistory((prev) => [...prev, newScreen]);
+      setScreenHistory((prev) => [...prev, screen]);
     }
-    setScreen(newScreen);
+    setCurrentScreen(screen);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const goBack = () => {
     if (screenHistory.length > 1) {
-      const nextHistory = [...screenHistory];
-      nextHistory.pop();
-      const prevScreen = nextHistory[nextHistory.length - 1];
-      setScreenHistory(nextHistory);
-      setScreen(prevScreen || 'home');
+      const newHistory = [...screenHistory];
+      newHistory.pop();
+      const previousScreen = newHistory[newHistory.length - 1];
+      setScreenHistory(newHistory);
+      setCurrentScreen(previousScreen);
     } else {
-      setScreen('home');
+      setCurrentScreen('home');
       setScreenHistory(['home']);
     }
   };
 
-  const openProductDetail = (id: string) => {
-    setSelectedProductId(id);
+  const activeModule = modules.find((m) => m.id === activeModuleId) || modules[0] || DEFAULT_MODULES[0];
+
+  // Filtering
+  const filteredProducts = products.filter((product) => {
+    if (product.moduleId && product.moduleId !== activeModuleId) return false;
+    if (selectedCategory !== 'all') {
+      const catMatch = (product.category || '').toLowerCase() === (selectedCategory || '').toLowerCase();
+      if (!catMatch) return false;
+    }
+    if (searchQuery.trim()) {
+      const query = (searchQuery || '').toLowerCase();
+      const nameMatch = (product.name || '').toLowerCase().includes(query);
+      const subMatch = (product.subtitle || '').toLowerCase().includes(query);
+      const descMatch = (product.description || '').toLowerCase().includes(query);
+      if (!nameMatch && !subMatch && !descMatch) return false;
+    }
+    if (filterSpiceLevel !== null && product.defaultSpice > filterSpiceLevel) {
+      return false;
+    }
+    if (product.price < filterPriceRange[0] || product.price > filterPriceRange[1]) {
+      return false;
+    }
+    if (filterFeaturedOnly && !product.featured) {
+      return false;
+    }
+    return true;
+  });
+
+  const activeFilterCount =
+    (filterSpiceLevel !== null ? 1 : 0) +
+    (filterPriceRange[0] > 0 || filterPriceRange[1] < 500 ? 1 : 0) +
+    (filterSortBy !== 'popular' ? 1 : 0) +
+    (filterOpenNow ? 1 : 0) +
+    (filterFeaturedOnly ? 1 : 0);
+
+  const resetFilters = () => {
+    setFilterSpiceLevel(null);
+    setFilterPriceRange([0, 500]);
+    setFilterSortBy('popular');
+    setFilterOpenNow(false);
+    setFilterFeaturedOnly(false);
+  };
+
+  const viewProductDetails = (product: Product) => {
+    setSelectedProduct(product);
     navigateTo('product-detail');
   };
 
+  const customizeProduct = (product: Product) => {
+    setSelectedProduct(product);
+    navigateTo('customize');
+  };
+
   const toggleFavorite = (productId: string) => {
-    setFavorites((prev) =>
-      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
-    );
+    setFavorites((prev) => {
+      const updated = prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId];
+      localStorage.setItem('foodgo_favs', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const isFavorite = (productId: string) => favorites.includes(productId);
 
-  const addToCart = (item: Omit<CartItem, 'id'>) => {
+  // Cart operations
+  const addToCart = async (item: Omit<CartItem, 'id'>) => {
     const newItem: CartItem = {
       ...item,
-      id: 'cart-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      id: 'cart-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
     };
     setCart((prev) => [...prev, newItem]);
+
+    // Asynchronously dispatch to WooCommerce Store API if connected
+    try {
+      await addToWcCart({
+        id: item.productId,
+        quantity: item.portion,
+        customization: {
+          spiceLevel: item.spiceLevel,
+          portion: item.portion,
+          toppings: item.selectedToppings,
+          sides: item.selectedSides,
+          curry: item.selectedCurry,
+          specialInstructions: item.specialInstructions,
+        },
+      });
+    } catch {
+      // Local state is preserved seamlessly
+    }
   };
 
   const removeFromCart = (itemId: string) => {
@@ -521,6 +423,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearCart = () => {
     setCart([]);
     setDirectCheckoutItemState(null);
+    clearWcCartService().catch(() => {});
+  };
+
+  const clearDirectCheckout = () => {
+    setDirectCheckoutItemState(null);
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -531,12 +438,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     navigateTo('payment');
   };
 
-  // Calculate order preview
+  // Calculate order totals
   const pendingOrder = (() => {
     if (directCheckoutItem) {
       const subtotal = directCheckoutItem.totalPrice;
-      const taxes = 0.3;
-      const deliveryFees = 1.5;
+      const taxes = Number((subtotal * 0.05).toFixed(2));
+      const deliveryFees = 0;
       const total = Number((subtotal + taxes + deliveryFees).toFixed(2));
       return {
         items: [directCheckoutItem],
@@ -544,13 +451,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taxes,
         deliveryFees,
         total,
-        estimatedDelivery: '15 - 30mins',
+        estimatedDelivery: '15 - 25 mins',
       };
     }
     if (cart.length > 0) {
       const subtotal = Number(cartTotal.toFixed(2));
-      const taxes = 0.3;
-      const deliveryFees = 1.5;
+      const taxes = Number((subtotal * 0.05).toFixed(2));
+      const deliveryFees = 0;
       const total = Number((subtotal + taxes + deliveryFees).toFixed(2));
       return {
         items: cart,
@@ -558,7 +465,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taxes,
         deliveryFees,
         total,
-        estimatedDelivery: '15 - 30mins',
+        estimatedDelivery: '15 - 25 mins',
       };
     }
     const defaultProduct = products[0] || DEFAULT_PRODUCTS[0];
@@ -569,19 +476,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       subtitle: defaultProduct.subtitle,
       image: defaultProduct.image,
       basePrice: defaultProduct.price,
-      portion: 2,
-      spiceLevel: 55,
+      portion: 1,
+      spiceLevel: 50,
       selectedToppings: [],
       selectedSides: [],
-      totalPrice: Number((defaultProduct.price * 2).toFixed(2)),
+      totalPrice: defaultProduct.price,
     };
     return {
       items: [defaultItem],
-      subtotal: Number((defaultProduct.price * 2).toFixed(2)),
-      taxes: 0.3,
-      deliveryFees: 1.5,
-      total: Number((defaultProduct.price * 2 + 1.8).toFixed(2)),
-      estimatedDelivery: '15 - 30mins',
+      subtotal: defaultProduct.price,
+      taxes: Number((defaultProduct.price * 0.05).toFixed(2)),
+      deliveryFees: 0,
+      total: Number((defaultProduct.price * 1.05).toFixed(2)),
+      estimatedDelivery: '15 - 25 mins',
     };
   })();
 
@@ -602,8 +509,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentCards((prev) => prev.filter((c) => c.id !== id));
   };
 
+  // Create order via WooCommerce Checkout API
   const createOrder = async (): Promise<Order> => {
-    const orderNum = '#FG-' + Math.floor(10000 + Math.random() * 90000);
+    const orderNum = '#WC-' + Math.floor(10000 + Math.random() * 90000);
     const newOrder: Order = {
       id: 'order-' + Date.now(),
       orderNumber: orderNum,
@@ -619,29 +527,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: pendingOrder.items,
-          subtotal: pendingOrder.subtotal,
-          taxes: pendingOrder.taxes,
-          deliveryFees: pendingOrder.deliveryFees,
-          total: pendingOrder.total,
-          paymentMethod: selectedCardType,
-          customerName: user.name,
-        }),
+      // Process through WooCommerce Store Checkout API
+      const checkoutRes = await processWcCheckout({
+        billing_address: {
+          first_name: user.name.split(' ')[0] || 'Customer',
+          last_name: user.name.split(' ').slice(1).join(' ') || 'Foodie',
+          address_1: user.address || 'Beach Road',
+          city: 'Calicut',
+          state: 'KL',
+          postcode: '673001',
+          country: 'IN',
+          email: user.email || 'customer@foodgo.com',
+          phone: user.phone || '+91 98765 43210',
+        },
+        payment_method: (selectedCardType || '').toLowerCase().includes('cash') ? 'cod' : 'cod',
       });
-      const data = await res.json();
-      if (data.success && data.order) {
-        setOrders((prev) => [data.order, ...prev]);
-        setLastPlacedOrder(data.order);
-        setIsSuccessModalOpen(true);
-        clearCart();
-        return data.order;
+
+      if (checkoutRes && checkoutRes.order_id) {
+        newOrder.id = String(checkoutRes.order_id);
+        newOrder.orderNumber = `#WC-${checkoutRes.order_id}`;
       }
     } catch {
-      // Fallback local save
+      // Resilient fallback creates the order locally
     }
 
     setOrders((prev) => [newOrder, ...prev]);
@@ -654,6 +561,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const closeSuccessModal = () => {
     setIsSuccessModalOpen(false);
     navigateTo('home', true);
+  };
+
+  const markSupportAsRead = () => {
+    setUnreadSupportCount(0);
   };
 
   const sendTextMessage = async (text: string, orderId?: string, orderNumber?: string) => {
@@ -673,32 +584,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: true,
     };
     setMessages((prev) => [...prev, userMsg]);
-
-    // Send to backend support endpoint
-    try {
-      const res = await fetch('/api/support', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageType: 'text',
-          text: text.trim(),
-          customerName: user.name,
-          customerEmail: user.email,
-          customerAvatar: user.avatar,
-          orderId,
-          orderNumber,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.message) {
-          // Update message with server ID if available
-          setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? data.message : m)));
-        }
-      }
-    } catch {
-      // Offline fallback
-    }
   };
 
   const sendVoiceMessage = async (
@@ -725,70 +610,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: true,
     };
     setMessages((prev) => [...prev, userMsg]);
-
-    try {
-      const res = await fetch('/api/support', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageType: 'audio',
-          audioUrl,
-          audioDuration: duration,
-          customerName: user.name,
-          customerEmail: user.email,
-          customerAvatar: user.avatar,
-          orderId,
-          orderNumber,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.message) {
-          setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? data.message : m)));
-        }
-      }
-    } catch {
-      // Offline fallback
-    }
-  };
-
-  const sendMessage = (text: string) => {
-    sendTextMessage(text);
-  };
-
-  const resetToDefaults = () => {
-    setUser(INITIAL_USER);
-    setFavorites(['cheeseburger-wendy']);
-    setCart([]);
-    setOrders(INITIAL_ORDERS);
-    setMessages(INITIAL_SUPPORT_MESSAGES);
-    setSelectedCardType('mastercard');
   };
 
   return (
     <AppContext.Provider
       value={{
-        screen,
-        screenHistory,
+        currentScreen,
         navigateTo,
         goBack,
-        selectedProductId,
-        setSelectedProductId,
-        openProductDetail,
-        modules,
+        screenHistory,
         activeModuleId,
-        activeModule,
         setActiveModuleId,
-        refreshModules: fetchModules,
-        curries,
-        refreshCurries: fetchCurries,
-        products,
+        modules,
+        activeModule,
+        selectedCategory,
+        setSelectedCategory,
         categories,
-        activeCategory,
-        setActiveCategory,
         searchQuery,
         setSearchQuery,
-        refreshProducts: fetchProducts,
+        filterSpiceLevel,
+        setFilterSpiceLevel,
+        filterPriceRange,
+        setFilterPriceRange,
+        filterSortBy,
+        setFilterSortBy,
+        filterOpenNow,
+        setFilterOpenNow,
+        filterFeaturedOnly,
+        setFilterFeaturedOnly,
+        resetFilters,
+        activeFilterCount,
+        products,
+        filteredProducts,
+        selectedProduct,
+        setSelectedProduct,
+        viewProductDetails,
+        customizeProduct,
         favorites,
         toggleFavorite,
         isFavorite,
@@ -799,8 +656,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearCart,
         cartTotal,
         cartCount,
-        pendingOrder,
+        directCheckoutItem,
         setDirectCheckoutItem,
+        clearDirectCheckout,
+        pendingOrder,
         user,
         updateUser,
         paymentCards,
@@ -808,22 +667,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedCardType,
         addPaymentCard,
         deletePaymentCard,
-        saveCardForFuture,
-        setSaveCardForFuture,
         orders,
         createOrder,
         lastPlacedOrder,
         isSuccessModalOpen,
-        setIsSuccessModalOpen,
         closeSuccessModal,
         messages,
-        sendMessage,
+        unreadSupportCount,
+        markSupportAsRead,
         sendTextMessage,
         sendVoiceMessage,
-        markSupportAsRead,
-        fetchSupportMessages,
-        unreadSupportCount,
-        resetToDefaults,
+        curries,
+        isWooCommerceConnected,
       }}
     >
       {children}
@@ -833,6 +688,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within an AppProvider');
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
   return context;
 };

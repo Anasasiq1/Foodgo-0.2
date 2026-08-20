@@ -122,13 +122,14 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
   };
 
   const filteredOrders = orders.filter((o) => {
+    const q = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (o.customer?.name && o.customer.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      o.items.some((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (o.orderNumber || '').toLowerCase().includes(q) ||
+      (o.customer?.name && o.customer.name.toLowerCase().includes(q)) ||
+      (Array.isArray(o.items) && o.items.some((i) => (i?.name || '').toLowerCase().includes(q)));
 
     const matchesStatus =
-      statusFilter === 'All' || o.status.toLowerCase() === statusFilter.toLowerCase();
+      statusFilter === 'All' || (o.status || '').toLowerCase() === (statusFilter || '').toLowerCase();
 
     return matchesSearch && matchesStatus;
   });

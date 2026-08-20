@@ -164,11 +164,13 @@ export interface CartItem {
   portion: number;
   spiceLevel?: number;
   curry?: SelectedCurrySnapshot;
+  selectedCurry?: any;
   selectedVariant?: SelectedOptionItem; // Primary single variant (e.g. Size/Portion)
   selectedOptions?: SelectedOptionItem[]; // All selected options & add-ons
   selectedSections?: SelectedSectionChoice[]; // Selected items from dynamic customization sections
   selectedToppings?: ToppingItem[];
   selectedSides?: SideItem[];
+  specialInstructions?: string;
   unitPrice?: number;
   totalPrice: number;
   isCustom?: boolean;
@@ -179,7 +181,7 @@ export interface UserProfile {
   name: string;
   email: string;
   address: string;
-  passwordMasked: string;
+  passwordMasked?: string;
   avatar: string;
   phone?: string;
 }
@@ -194,7 +196,7 @@ export interface PaymentCard {
   isDefault?: boolean;
 }
 
-export type PaymentMethodType = 'upi' | 'card' | 'cod' | 'mastercard' | 'visa';
+export type PaymentMethodType = 'upi' | 'card' | 'cod' | 'mastercard' | 'visa' | 'Cash on Delivery' | string;
 
 export type PaymentStatusType =
   | 'Pending'
@@ -211,7 +213,20 @@ export type OrderStatusType =
   | 'In Transit'
   | 'Out for Delivery'
   | 'Delivered'
-  | 'Cancelled';
+  | 'Cancelled'
+  | 'Order Placed'
+  | string;
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  order: number;
+  active: boolean;
+  icon?: string;
+  moduleId?: string;
+}
+
+export type SupportMessage = ChatMessage;
 
 export interface DeliveryTimeSlot {
   id: string;

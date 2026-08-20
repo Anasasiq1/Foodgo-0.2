@@ -9,12 +9,14 @@ interface AdminCustomersTabProps {
 export const AdminCustomersTab: React.FC<AdminCustomersTabProps> = ({ customers }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCustomers = customers.filter((c) => {
+    const q = (searchQuery || '').toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -65,12 +67,13 @@ export const AdminCustomersTab: React.FC<AdminCustomersTabProps> = ({ customers 
               <div>
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-12 h-12 rounded-2xl bg-[#322A2E] text-white flex items-center justify-center font-black text-base shadow-xs">
-                    {cust.name
+                    {(cust.name || 'Customer')
                       .split(' ')
+                      .filter(Boolean)
                       .map((n) => n[0])
                       .join('')
                       .substring(0, 2)
-                      .toUpperCase()}
+                      .toUpperCase() || 'CU'}
                   </div>
 
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-extrabold">

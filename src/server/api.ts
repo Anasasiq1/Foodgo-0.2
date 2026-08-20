@@ -204,9 +204,9 @@ apiRouter.get('/admin/dashboard', requireAdminAuth, (_req: Request, res: Respons
     .reduce((sum, o) => sum + (o.total || 0), 0);
 
   // Today's orders
-  const todayOrders = database.orders.filter((o) => o.date.toLowerCase().includes('today')).length || 1;
+  const todayOrders = database.orders.filter((o) => (o.date || '').toLowerCase().includes('today')).length || 1;
   const todayRevenue = database.orders
-    .filter((o) => o.date.toLowerCase().includes('today') && o.status !== 'Cancelled')
+    .filter((o) => (o.date || '').toLowerCase().includes('today') && o.status !== 'Cancelled')
     .reduce((sum, o) => sum + (o.total || 0), 0) || 18.19;
 
   // Payment Breakdown
@@ -1275,7 +1275,7 @@ apiRouter.post('/orders', (req: Request, res: Response) => {
   database.orders.unshift(newOrder);
 
   // Register / update customer stats
-  const existingCust = database.customers.find((c) => c.email.toLowerCase() === customerEmail.toLowerCase());
+  const existingCust = database.customers.find((c) => (c.email || '').toLowerCase() === customerEmail.toLowerCase());
   if (existingCust) {
     existingCust.totalOrders += 1;
     existingCust.totalSpent = Number((existingCust.totalSpent + newOrder.total).toFixed(2));
@@ -1480,7 +1480,7 @@ apiRouter.get('/support', (req: Request, res: Response) => {
   const customerName = String(req.query.name || 'Sophia Patel');
 
   let conversation = database.supportConversations.find(
-    (c) => c.customerEmail.toLowerCase() === customerEmail
+    (c) => (c.customerEmail || '').toLowerCase() === customerEmail
   );
 
   if (!conversation) {
@@ -1526,7 +1526,7 @@ apiRouter.get('/support/unread-count', (req: Request, res: Response) => {
   const database = db.getDb();
   const customerEmail = String(req.query.email || 'sophiapatel@gmail.com').toLowerCase();
   const conversation = database.supportConversations.find(
-    (c) => c.customerEmail.toLowerCase() === customerEmail
+    (c) => (c.customerEmail || '').toLowerCase() === customerEmail
   );
 
   return res.json({
@@ -1563,7 +1563,7 @@ apiRouter.post('/support', (req: Request, res: Response) => {
   const email = (customerEmail || 'sophiapatel@gmail.com').toLowerCase();
 
   let conv = database.supportConversations.find(
-    (c) => (conversationId && c.id === conversationId) || c.customerEmail.toLowerCase() === email
+    (c) => (conversationId && c.id === conversationId) || (c.customerEmail || '').toLowerCase() === email
   );
 
   if (!conv) {
